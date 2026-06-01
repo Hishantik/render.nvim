@@ -8,6 +8,7 @@ var QRCode = require("qrcode");
 var filemanager = require("./filemanager.js");
 var htmlfile = require("./htmlfile.js");
 var cssfile = require("./cssfile.js");
+var tsfile = require("./tsfile.js");
 
 function Server(settings) {
 	this.settings = settings;
@@ -83,6 +84,13 @@ Server.prototype.handleEditorCommand = function(command, data) {
 				});
 			} else if (currentFile.type === 'javascript') {
 				this.broadcast({ command: 'eval', js: data[0] });
+			} else if (currentFile.type === 'typescript') {
+				var result = tsfile.transpile(data[0], currentFile.path.system);
+				if (result.error) {
+					this.setError(result.error);
+				} else {
+					this.broadcast({ command: 'eval', js: result.js });
+				}
 			}
 			break;
 		case 'e': this.broadcast({ command: 'eval', js: data[0] }); break;
@@ -181,8 +189,19 @@ Server.prototype.handleFileRequest = function(request, response) {
 	const self = this;
 
 	if (file) {
-		response.writeHead(200, { "Content-Type": mime.lookup(url) });
-		response.end(file.webSrc());
+		if (file.type === 'typescript') {
+			var result = tsfile.transpile(file.source, file.path.system);
+			if (result.error) {
+				response.writeHead(500);
+				response.end('Transpilation error: ' + result.error);
+			} else {
+				response.writeHead(200, { "Content-Type": "application/javascript" });
+				response.end(result.js);
+			}
+		} else {
+			response.writeHead(200, { "Content-Type": mime.lookup(url) });
+			response.end(file.webSrc());
+		}
 	} else {
 		const editorRoot = (this.files.editorRoot || '').replace(/\/+$/, '');
 		fs.readFile(path.join(editorRoot, url), (err, data) => {
