@@ -21,6 +21,9 @@ function FileManager(changePageCallback) {
 FileManager.prototype.newFile = function(id, name, filePath, type, source) {
 	if (source === undefined) source = '';
 
+	// Normalize Neovim's 'typescriptreact' filetype to 'typescript'
+	if (type === 'typescriptreact') type = 'typescript';
+
 	var createdFile;
 	switch (type) {
 		case 'html': createdFile = new htmlfile(source); break;

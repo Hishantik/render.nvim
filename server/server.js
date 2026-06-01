@@ -72,6 +72,7 @@ Server.prototype.handleEditorCommand = function(command, data) {
 	switch (command) {
 		case 'b':
 			if (!currentFile) break;
+			currentFile.source = data[0];
 			if (currentFile.type === 'html') {
 				currentFile.setContent(data[0], (err, diff) => {
 					this.setError(err);
@@ -93,7 +94,18 @@ Server.prototype.handleEditorCommand = function(command, data) {
 				}
 			}
 			break;
-		case 'e': this.broadcast({ command: 'eval', js: data[0] }); break;
+		case 'e':
+			if (currentFile && currentFile.type === 'typescript') {
+				var evalResult = tsfile.transpile(data[0], currentFile.path.system);
+				if (evalResult.error) {
+					this.setError(evalResult.error);
+				} else {
+					this.broadcast({ command: 'eval', js: evalResult.js });
+				}
+			} else {
+				this.broadcast({ command: 'eval', js: data[0] });
+			}
+			break;
 		case 'r': this.broadcast({ command: 'reload_page' }); break;
 		case 'f':
 			if (!this.files.getById(data[0])) this.files.newFile(data[0], data[1], data[2], data[3]);
@@ -237,8 +249,14 @@ Server.prototype.setError = function(message) {
 	if (!this.hasError && !message) return;
 	if (message) {
 		this.hasError = true;
-		const err = message[0];
-		this.broadcast({ command: 'error', action: 'show', message: `${err.line}:${err.col}: ${err.message}` });
+		var errorMessage;
+		if (typeof message === 'string') {
+			errorMessage = message;
+		} else {
+			const err = message[0];
+			errorMessage = `${err.line}:${err.col}: ${err.message}`;
+		}
+		this.broadcast({ command: 'error', action: 'show', message: errorMessage });
 	} else {
 		this.hasError = false;
 		this.broadcast({ command: 'error', action: 'clear' });
